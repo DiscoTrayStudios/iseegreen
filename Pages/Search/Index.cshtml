@@ -7,61 +7,68 @@
 <br>
 
 <div id="header_box">
-<h1 id="search_heading">Search</h1>
+    <h1 id="search_heading">Search</h1>
 </div>
 
-<form>
-    <p>
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject UserManager<IdentityUser> UserManager
 
-        <select class="custom_select" asp-for="CategoryFilter" asp-items="Model.Categories" asp-route-CategoryFilter="@Model.CurrentCat">
+@if (!string.IsNullOrEmpty(Model.StatusMessage))
+{
+    <div id="statusMessage" class="status-message">
+        @Model.StatusMessage
+    </div>
+}
+
+<br>
+
+<form method="get">
+    <p>
+        <select class="custom_select" asp-for="CategoryFilter" asp-items="Model.Categories">
             <option id="op" value="">Category</option>
             @foreach ((string cat, string desc) in Model.CategoryOptions)
             {
                 <option value="@cat">@desc</option>
             }
         </select>
-        
-        <input type="text" id="famsearch" placeholder="Family" asp-for="FamilyString" />
 
-        <input type="text" id="genussearch" placeholder="Genus" asp-for="GenusString" />
-        
-        <input type="text" id="speciesearch" placeholder="Species" asp-for="SearchString" />
-        
+        <input type="text" id="famsearch" placeholder="Family" asp-for="FamilyString" oninput="hidePlaceholderText(2)" />
+
+        <input type="text" id="genussearch" placeholder="Genus" asp-for="GenusString" oninput="hidePlaceholderText(1)" />
+    
+        <input type="text" id="speciesearch" placeholder="Species" asp-for="SearchString" oninput="hidePlaceholderText(0)" />
         <input type="submit" value="Apply Filters"/>
-
         <a href="./Search">Clear</a>
+
+        <p id="placeholderText">placeholder autocomplete</p>
 
     </p>
 </form>
-
 
 <table class="table">
     <thead>
         <tr>
             <th id="check">
-                 
+
             </th>
              <th id ="cat">
                 @Html.DisplayNameFor(model => model.Taxa[0].Genus.Family.Category)
             </th>
-            <th id ="family">
+            <th id="family">
                 @Html.DisplayNameFor(model => model.Taxa[0].Genus.Family)
             </th>
             <th id="genus">
-                <a asp-page="./Index" asp-route-sortOrder="@Model.GenusSort" asp-route-CategoryFilter="@Model.CurrentCat" asp-route-SearchString="@Model.CurrentSpecies"
-   asp-route-GenusString="@Model.CurrentGenus"
-   asp-route-FamilyString="@Model.CurrentFamily">
+                <a asp-page="./Index" asp-route-sortOrder="@Model.GenusSort">
                     @Html.DisplayNameFor(model => model.Taxa[0].Genus)
                 </a>
-                
+
             </th>
             <th id="species">
-                <a asp-page="./Index" asp-route-sortOrder="@Model.SpeciesSort" asp-route-CategoryFilter="@Model.CurrentCat" asp-route-SearchString="@Model.CurrentSpecies"
-   asp-route-GenusString="@Model.CurrentGenus"
-   asp-route-FamilyString="@Model.CurrentFamily">
+                <a asp-page="./Index" asp-route-sortOrder="@Model.SpeciesSort">
                     @Html.DisplayNameFor(model => model.Taxa[0].SpecificEpithet)
                 </a>
-                
+
             </th>
             <th id="infra">
                 @Html.DisplayNameFor(model => model.Taxa[0].InfraspecificEpithet)
@@ -69,14 +76,18 @@
             <th id="rank">
                 @Html.DisplayNameFor(model => model.Taxa[0].TaxonRank)
             </th>
-
+            @if (SignInManager.IsSignedIn(User))
+            {
+                <th id="addList">Add To List</th>
+            }
         </tr>
     </thead>
     <tbody>
-@foreach (var item in Model.Taxa) {
+    @foreach (var item in Model.Taxa)
+    {
         <tr>
             <td id="check">
-                <a class="popup" id="plus" asp-area="" asp-page="./Details" asp-route-KewID="@item.KewID">&#x2795</a>
+                <a class="popup" id="plus" asp-page="./Details" asp-route-KewID="@item.KewID">&#x2795</a>
             </td>
             <td id="cat">
                 @Html.DisplayFor(modelItem => item.Genus.Family.Category.Description)
@@ -96,10 +107,30 @@
             <td id="rank">
                 @Html.DisplayFor(modelItem => item.TaxonRank)
             </td>
+            @if (SignInManager.IsSignedIn(User))
+            {
+                <td id="addList">
+                    <form method="post" asp-page-handler="AddList">
+                        <input type="hidden" asp-for="SelectedKewId" value="@item.KewID" />
+                        <input type="hidden" asp-for="PageIndex" value="@Model.Taxa.PageIndex"/>
+                        <select asp-for="SelectedListId">
+                            <option value="">Select List</option>
+                            @foreach (var list in Model.SelectList)
+                            {
+                                if (list.OwnerID == UserManager.GetUserId(User))
+                                {
+                                    <option value="@list.Id">@list.Name</option>
+                                }
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                    </form>
+                </td>
+            }
 
-    
+
         </tr>
-}
+    }
     </tbody>
 </table>
 
@@ -109,29 +140,85 @@
 }
 
 <a id="prevnex"
-    asp-page="./Index"
-    asp-route-CategoryFilter="@Model.CurrentCat"
-    asp-route-sortOrder="@Model.CurrentSort"
+   asp-page="./Index"
    asp-route-pageIndex="@(Model.Taxa.PageIndex - 1)"
-   asp-route-SearchString="@Model.CurrentSpecies"
-   asp-route-GenusString="@Model.CurrentGenus"
-   asp-route-FamilyString="@Model.CurrentFamily"
+   asp-route-sortOrder="@Model.CurrentSort"
    asp-route-currentFilter="@Model.CurrentFilter"
+   asp-route-CategoryFilter="@Model.CurrentCat"
    class="btn btn-primary @prevDisabled">
     Previous
 </a>
 <a id="prevnex"
-    asp-page="./Index"
-    asp-route-CategoryFilter="@Model.CurrentCat"
-    asp-route-sortOrder="@Model.CurrentSort"
+   asp-page="./Index"
    asp-route-pageIndex="@(Model.Taxa.PageIndex + 1)"
+   asp-route-sortOrder="@Model.CurrentSort"
    asp-route-currentFilter="@Model.CurrentFilter"
-    asp-route-GenusString="@Model.CurrentGenus"
-    asp-route-SearchString="@Model.CurrentSpecies"
-    asp-route-FamilyString="@Model.CurrentFamily"
+   asp-route-CategoryFilter="@Model.CurrentCat"
    class="btn btn-primary @nextDisabled">
     Next
 </a>
+
+<script>
+    function hidePlaceholderText(level) {
+        const placeholderElement = document.getElementById('placeholderText');
+        familiesString = document.getElementById('famsearch').value;
+        generaString = document.getElementById('genussearch').value;
+        speciesString = document.getElementById('speciesearch').value;
+
+        // Case 0:#check familiesString has length of 2 or greater
+        // Case 1:#check generaString has length of 2 or greater
+        // Case 2:#check speciesString has length of 2 or greater
+
+        
+        if (familiesString.length >= 2) {
+            level = 2;
+            searchText = familiesString;
+        } else if (generaString.length >= 2) {
+            level = 1;
+            searchText = generaString;
+        } else if (speciesString.length >= 4) {
+            level = 0;
+            searchText = speciesString;
+        } else {
+            level = -1;
+            searchText = "n";
+        }
+
+        // Check if any of the input fields have at least 2 characters
+        if (searchText.length >= 2) {
+
+            //const searchText = "quercus";
+
+            console.log('Search text:', searchText); // Log the search text
+            console.log('Level:', level); // Log the level
+            console.log("family string:", familiesString);
+            console.log("genus string:", generaString);
+            console.log("species string:", speciesString);
+            
+            // Clear the existing content
+            placeholderElement.innerHTML = '';
+
+            fetch(`/Search/Index?handler=LikelyMatches&query=${searchText}&level=${level}`)
+                .then(response => response.json())
+                .then(familyString => {
+                    familyString.forEach(plant => {
+                        console.log(plant); 
+                        placeholderElement.innerHTML += `<div>${plant}</div>`; 
+                    });
+                })
+    .catch(error => {
+        console.error('Error fetching likely matches:', error);
+    });
+
+        } else {
+            console.log('Reset placeholder text'); 
+            placeholderElement.innerHTML = 'placeholder autocomplete'; 
+        }
+    }
+</script>
+
+
+
 
 
 
@@ -157,5 +244,5 @@
         display: none;
     }
 
-   
+
 </style>
