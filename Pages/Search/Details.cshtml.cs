@@ -14,6 +14,8 @@ using Newtonsoft.Json.Linq;
 using System.ComponentModel;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore.Internal;
 
 
 namespace csci340_iseegreen.Pages_Search
@@ -27,18 +29,15 @@ namespace csci340_iseegreen.Pages_Search
             _context = context;
         }
 
-        public List<Taxa> Taxon {get; set;} = default!;
+        public Taxa Taxon {get; set;} = default!;
 
         public List<Lists> SelectList {get; set;} = default!;
 
-        public string Identifier {get; set;} = default!;
-
         public string Error {get; set;} = default!;
 
-        public int id {get; set;} = 1;
-
-        private async Task RegenerateFrom(string KewID)
+        private async Task<IActionResult> RegenerateFrom(string KewID)
         {
+            SelectList = [.. _context.Lists];
             IQueryable<Taxa> taxaIQ =
                 from t in _context.Taxa
                     .Include(g => g.Genus)
@@ -47,48 +46,90 @@ namespace csci340_iseegreen.Pages_Search
                 select t;
             taxaIQ = taxaIQ
                 .Where(s => s.KewID.Equals(KewID));
-            Taxon = await taxaIQ.ToListAsync();
-            SelectList = [.. _context.Lists];
+            Taxa? maybeTaxon = taxaIQ.FirstOrDefault();
+            if (maybeTaxon == null)
+            {
+                Error = "This plant doesn't have a valid Kew ID.";
+                return Page();
+            }
+            Taxon = maybeTaxon!;
+            return Page();
         }
 
         public async Task<IActionResult> OnGetAsync(string KewID)
         {
-            await RegenerateFrom(KewID);
-            Identifier = KewID;
-            return Page();
+            return await RegenerateFrom(KewID);
         }
 
-        public async Task<IActionResult> OnPostAddList(string KewID, int? list) {
-            //await MakeApiCall();
-            if (list == null) {
-                Error = "You have to select a list.";
-                await RegenerateFrom(KewID);
-                Identifier = KewID;
-                //Console.WriteLine("Identifier: " + Identifier);
-                return Page();
+        public async Task<IActionResult> OnPostAddList(string KewID, int? list, string? userID, string? newName) {
+            int? receivingListID;
+            Console.WriteLine("Starting OnPostAddList...");
+            Console.WriteLine($"KewID = '{KewID}'; list = {list}; userID = '{userID}'; newName = '{newName}'");
+            if (list == null)
+            {
+                Console.WriteLine("list was null");
+                if (newName == null)
+                {
+                    Console.WriteLine("newName was null");
+                    // The user hasn't selected an existing list or given a name for a new list.
+                    Error = "You have to select a list.";
+                    return await RegenerateFrom(KewID);
+                }
+                else
+                {
+                    Console.WriteLine("newName was not null");
+                    // TODO we might need to ensure that the given name is unique for this user; not sure at the moment.
+                    // Generate a unique ID for the new list.
+                    HashSet<int> existingListIDs = [.. _context.Lists.Select(l => l.Id)];
+                    bool doContinue = true;
+                    int newListID = 0;
+                    while (doContinue)
+                    {
+                        newListID = new Random().Next();
+                        doContinue = existingListIDs.Contains(newListID);
+                    }
+                    // Create a new list.
+                    Lists newUserList = new()
+                    {
+                        Name = newName,
+                        Id = newListID,
+                        OwnerID = userID!,
+                    };
+                    _context.Lists.Add(newUserList);
+                    _context.SaveChanges();
+                    receivingListID = newListID;
+                }
             }
-
-            ListItems item;
-
-            item = await _context.ListItems.SingleOrDefaultAsync(l => l.KewID == KewID && l.ListID == list.Value);
-
-            if (item != null) {
-                Error = "This plant is already in that list.";
-                await RegenerateFrom(KewID);
-                Identifier = KewID;
-                return Page();
+            else
+            {
+                Console.WriteLine("list was not null");
+                // Check if the plant is already in the given list.
+                IQueryable<ListItems> matches =
+                    from li in _context.ListItems
+                        .Where(li => li.ListID == list && li.KewID == KewID)
+                    select li;
+                if (!matches.IsNullOrEmpty())
+                {
+                    Console.WriteLine($"The given KewID is already in the list with ID = {list}");
+                    // The given plant is already in the selected list.
+                    Error = "This plant is already in the selected list.";
+                    return await RegenerateFrom(KewID);
+                }
+                receivingListID = list;
             }
-
-            item = new ListItems {
+            // Create and add the new ListItem.
+            ListItems newItem = new()
+            {
                 KewID = KewID,
-                ListID = list.Value,
-                TimeDiscovered = DateTime.Now
+                ListID = receivingListID.Value,
+                TimeDiscovered = DateTime.Now,
             };
 
-            await _context.AddAsync(item);
-            await _context.SaveChangesAsync();
+            _context.ListItems.Add(newItem);
+            _context.SaveChanges();
 
-            return RedirectToPage("/ListItems/Index", new { itemid = list.ToString() });
+            Console.WriteLine("Finished OnPostAddList");
+            return await RegenerateFrom(KewID);
         }
     }
 }

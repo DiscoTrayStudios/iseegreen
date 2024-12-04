@@ -4,6 +4,7 @@
 @{
     ViewData["Title"] = "Details";
     string error = Model.Error;
+    string kewID = Model.Taxon.KewID;
 }
 
 
@@ -22,97 +23,94 @@
     </div>
 }
 
-@foreach (var item in Model.Taxon) {
-
-
 <div>
     <h4>Lists</h4>
     <hr />
     <dl class="row">
         <dt>
-            @Html.DisplayNameFor(model => model.Taxon[0].KewID) : @Html.DisplayFor(modelItem => item.KewID)
+            @Html.DisplayNameFor(model => model.Taxon.KewID) : @Html.DisplayFor(model => model.Taxon.KewID)
         </dt>
         <dt>
-            @Html.DisplayNameFor(model => model.Taxon[0].Authors) : @Html.DisplayFor(modelItem => item.Authors)
+            @Html.DisplayNameFor(model => model.Taxon.Authors) : @Html.DisplayFor(model => model.Taxon.Authors)
         </dt>
         <dt>
-            @Html.DisplayNameFor(model => model.Taxon[0].USDAsymbol) : @Html.DisplayFor(modelItem => item.USDAsymbol)
+            @Html.DisplayNameFor(model => model.Taxon.USDAsymbol) : @Html.DisplayFor(model => model.Taxon.USDAsymbol)
         </dt>
         <dt>
-            @Html.DisplayNameFor(model => model.Taxon[0].USDAsynonym) : @Html.DisplayFor(modelItem => item.USDAsynonym)
+            @Html.DisplayNameFor(model => model.Taxon.USDAsynonym) : @Html.DisplayFor(model => model.Taxon.USDAsynonym)
         </dt>
     </dl>
-    </div>
+</div>
 
-}
 <table class="table">
     <thead>
         <tr>
              <th id ="cat">
-                @Html.DisplayNameFor(model => model.Taxon[0].Genus.Family.Category)
+                @Html.DisplayNameFor(model => model.Taxon.Genus.Family.Category)
             </th>
             <th id ="family">
-                @Html.DisplayNameFor(model => model.Taxon[0].Genus.Family)
+                @Html.DisplayNameFor(model => model.Taxon.Genus.Family)
             </th>
             <th id="genus">
-                    @Html.DisplayNameFor(model => model.Taxon[0].Genus)             
+                @Html.DisplayNameFor(model => model.Taxon.Genus)             
             </th>
             <th id="species">
-                    @Html.DisplayNameFor(model => model.Taxon[0].SpecificEpithet)
+                @Html.DisplayNameFor(model => model.Taxon.SpecificEpithet)
             </th>
             <th id="infra">
-                @Html.DisplayNameFor(model => model.Taxon[0].InfraspecificEpithet)
+                @Html.DisplayNameFor(model => model.Taxon.InfraspecificEpithet)
             </th>
             <th id="rank">
-                @Html.DisplayNameFor(model => model.Taxon[0].TaxonRank)
+                @Html.DisplayNameFor(model => model.Taxon.TaxonRank)
             </th>
 
         </tr>
     </thead>
     <tbody>
-@foreach (var item in Model.Taxon) {
         <tr>
             <td id="cat">
-                @Html.DisplayFor(modelItem => item.Genus.Family.Category.Description)
+                @Html.DisplayFor(model => model.Taxon.Genus.Family.Category.Description)
             </td>
             <td id="family">
-                @Html.DisplayFor(modelItem => item.Genus.FamilyID)
+                @Html.DisplayFor(model => model.Taxon.Genus.FamilyID)
             </td>
             <td id="genus">
-                @Html.DisplayFor(modelItem => item.GenusID)
+                @Html.DisplayFor(model => model.Taxon.GenusID)
             </td>
             <td id="species">
-                @Html.DisplayFor(modelItem => item.SpecificEpithet)
+                @Html.DisplayFor(model => model.Taxon.SpecificEpithet)
             </td>
             <td id="infra">
-                @Html.DisplayFor(modelItem => item.InfraspecificEpithet)
+                @Html.DisplayFor(model => model.Taxon.InfraspecificEpithet)
             </td>
             <td id="rank">
-                @Html.DisplayFor(modelItem => item.TaxonRank)
+                @Html.DisplayFor(model => model.Taxon.TaxonRank)
             </td>
-
         </tr>
-}
     </tbody>
 </table>
 
 @if (SignInManager.IsSignedIn(User))
 {
-<form asp-page-handler="AddList" method="post">
-    <select name="list">
-        <option id="op" value="">Select List</option>
-        @foreach (var item in Model.SelectList) {
-            var user = @UserManager.GetUserName(User);
-            if (item.OwnerID == UserManager.GetUserId(User)) {
-                <option value="@item.Id">
-                    @Html.DisplayFor(modelItem => item.Name)
-                </option>
+    <form asp-page-handler="AddList" method="post">
+        <input type="hidden" value="@kewID" name="KewID" />
+        <select name="list">
+            <option id="selectList" value="">Select List</option>
+            @foreach (var item in Model.SelectList)
+            {
+                if (item.OwnerID == UserManager.GetUserId(User))
+                {
+                    <option value="@item.Id">
+                        @Html.DisplayFor(modelItem => item.Name)
+                    </option>
+                }
             }
-    }
-    </select>
-    <input type="hidden" value="@Model.Identifier" name="KewID" />
-    <input type="submit" value="Add" />
-</form>
+            <option id="newList" value="">Start a New List</option>
+        </select>
+        <input type="hidden" value="@UserManager.GetUserId(User)" name="userID" />
+        <input type="text" value="" placeholder="New list name" name="newName" />
+        <input type="submit" value="Add" />
+    </form>
 }
 
 <div>
