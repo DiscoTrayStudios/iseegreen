@@ -13,272 +13,123 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.ComponentModel;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore.Internal;
 
 
 namespace csci340_iseegreen.Pages_Search
 {
     public class DetailsModel : PageModel
     {
-        private readonly csci340_iseegreen.Data.ISeeGreenContext _context;
+        private readonly ISeeGreenContext _context;
 
-        public DetailsModel(csci340_iseegreen.Data.ISeeGreenContext context)
+        public DetailsModel(ISeeGreenContext context)
         {
             _context = context;
         }
 
-        public List<Taxa> Taxon {get; set;} = default!;
+        public Taxa Taxon {get; set;} = default!;
 
         public List<Lists> SelectList {get; set;} = default!;
 
-        public string Identifier {get; set;} = default!;
-
         public string Error {get; set;} = default!;
 
-        public int id {get; set;} = 1;
-
-        public string scientifcName {get; set;}
-
-        public async Task<IActionResult> OnGetAsync(string KewID)
+        private async Task<IActionResult> RegenerateFrom(string KewID)
         {
-            //await MakeApiCall();
-
-            IQueryable<csci340_iseegreen.Models.Taxa> taxaIQ = from t in _context.Taxa.Include(g => g.Genus).Include(f => f.Genus!.Family).Include(c => c.Genus!.Family!.Category) select t;
-
-            taxaIQ = taxaIQ.Where(s => s.KewID.Equals(KewID));
-
-            var taxon = await taxaIQ.ToListAsync();
-
-            if (taxon == null) {
-                return NotFound();
-            }
-            else {
-                Taxon = taxon;
-            }
-
-            if (_context.Lists != null)
+            SelectList = [.. _context.Lists];
+            IQueryable<Taxa> taxaIQ =
+                from t in _context.Taxa
+                    .Include(g => g.Genus)
+                    .Include(f => f.Genus!.Family)
+                    .Include(c => c.Genus!.Family!.Category)
+                select t;
+            taxaIQ = taxaIQ
+                .Where(s => s.KewID.Equals(KewID));
+            Taxa? maybeTaxon = taxaIQ.FirstOrDefault();
+            if (maybeTaxon == null)
             {
-                SelectList = await _context.Lists
-                .ToListAsync();
+                Error = "This plant doesn't have a valid Kew ID.";
+                return Page();
             }
-            Identifier = KewID;
-            string genus = Taxon[0].GenusID;
-            string species = Taxon[0].SpecificEpithet;
-
-            scientifcName = genus + " " + species.ToLower();
-
-
-            // see if I can get a string here... time to investigate the properties of Taxon. 
-            Console.WriteLine("Genus: " + genus);
-            Console.WriteLine("Species: " + species);
-            Console.WriteLine("Scientific Name: " + scientifcName);
-            //int id = await GetIDfromName(scientifcName);
-            Console.WriteLine("ID in OnGet is: " + id);
-
+            Taxon = maybeTaxon!;
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAddList(string KewID, int? list) {
-            //await MakeApiCall();
-            if (list == null) {
-                Error = "You have to select a list.";
-                IQueryable<csci340_iseegreen.Models.Taxa> taxaIQ = from t in _context.Taxa.Include(g => g.Genus).Include(f => f.Genus!.Family).Include(c => c.Genus!.Family!.Category) select t;
+        public async Task<IActionResult> OnGetAsync(string KewID)
+        {
+            return await RegenerateFrom(KewID);
+        }
 
-                taxaIQ = taxaIQ.Where(s => s.KewID.Equals(KewID));
-
-                var taxon = await taxaIQ.ToListAsync();
-
-                if (taxon == null)
+        public async Task<IActionResult> OnPostAddList(string KewID, int? list, string? userID, string? newName) {
+            int? receivingListID;
+            Console.WriteLine("Starting OnPostAddList...");
+            Console.WriteLine($"KewID = '{KewID}'; list = {list}; userID = '{userID}'; newName = '{newName}'");
+            if (list == null)
+            {
+                Console.WriteLine("list was null");
+                if (newName == null)
                 {
-                    return NotFound();
+                    Console.WriteLine("newName was null");
+                    // The user hasn't selected an existing list or given a name for a new list.
+                    Error = "You have to select a list.";
+                    return await RegenerateFrom(KewID);
                 }
                 else
                 {
-                    Taxon = taxon;
+                    Console.WriteLine("newName was not null");
+                    // TODO we might need to ensure that the given name is unique for this user; not sure at the moment.
+                    // Generate a unique ID for the new list.
+                    HashSet<int> existingListIDs = [.. _context.Lists.Select(l => l.Id)];
+                    bool doContinue = true;
+                    int newListID = 0;
+                    while (doContinue)
+                    {
+                        newListID = new Random().Next();
+                        doContinue = existingListIDs.Contains(newListID);
+                    }
+                    // Create a new list.
+                    Lists newUserList = new()
+                    {
+                        Name = newName,
+                        Id = newListID,
+                        OwnerID = userID!,
+                    };
+                    _context.Lists.Add(newUserList);
+                    _context.SaveChanges();
+                    receivingListID = newListID;
                 }
-
-                if (_context.Lists != null)
-                {
-                    SelectList = await _context.Lists
-                    .ToListAsync();
-                }
-                Identifier = KewID;
-                //Console.WriteLine("Identifier: " + Identifier);
-                return Page();
             }
-
-            ListItems item;
-
-            item = await _context.ListItems.SingleOrDefaultAsync(l => l.KewID == KewID && l.ListID == list.Value);
-
-            if (item != null) {
-                Error = "This plant is already in that list.";
-                IQueryable<csci340_iseegreen.Models.Taxa> taxaIQ = from t in _context.Taxa.Include(g => g.Genus).Include(f => f.Genus!.Family).Include(c => c.Genus!.Family!.Category) select t;
-
-                taxaIQ = taxaIQ.Where(s => s.KewID.Equals(KewID));
-
-                var taxon = await taxaIQ.ToListAsync();
-
-                if (taxon == null)
+            else
+            {
+                Console.WriteLine("list was not null");
+                // Check if the plant is already in the given list.
+                IQueryable<ListItems> matches =
+                    from li in _context.ListItems
+                        .Where(li => li.ListID == list && li.KewID == KewID)
+                    select li;
+                if (!matches.IsNullOrEmpty())
                 {
-                    return NotFound();
+                    Console.WriteLine($"The given KewID is already in the list with ID = {list}");
+                    // The given plant is already in the selected list.
+                    Error = "This plant is already in the selected list.";
+                    return await RegenerateFrom(KewID);
                 }
-                else
-                {
-                    Taxon = taxon;
-                }
-
-                if (_context.Lists != null)
-                {
-                    SelectList = await _context.Lists
-                    .ToListAsync();
-                }
-                Identifier = KewID;
-                return Page();
+                receivingListID = list;
             }
-
-            item = new ListItems {
+            // Create and add the new ListItem.
+            ListItems newItem = new()
+            {
                 KewID = KewID,
-                ListID = list.Value,
-                TimeDiscovered = DateTime.Now
+                ListID = receivingListID.Value,
+                TimeDiscovered = DateTime.Now,
             };
-            Console.WriteLine("specific name: " );
-            //var id = await GetIDfromName(scientifcName);
-            Console.WriteLine("ID in OnGet is: " + id);
 
-            await _context.AddAsync(item);
-            await _context.SaveChangesAsync();
+            _context.ListItems.Add(newItem);
+            _context.SaveChanges();
 
-            return RedirectToPage("/ListItems/Index", new { itemid = list.ToString() });
+            Console.WriteLine("Finished OnPostAddList");
+            return await RegenerateFrom(KewID);
         }
-
-
-        public async Task MakeApiCall()
-        {
-            using (var client = new HttpClient())
-            {
-                try
-                {
-                    string url = $"https://perenual.com/api/species-list?key=sk-il1O6717dcf920ca97383&q=Monstera deliciosa";
-
-                    // Make the GET request
-                    var response = await client.GetAsync(url);
-                    response.EnsureSuccessStatusCode();
-                    var responseData = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine("Successfully got data");
-
-                    // Parse the JSON response
-                    var jsonObject = JObject.Parse(responseData);
-
-                    // Extract the "data" array
-                    var data = jsonObject["data"] as JArray;
-
-                    if (data != null && data.Count > 0)
-                    {
-                        // Get the first entry in the "data" array
-                        var firstEntry = data[0];
-
-                        // Extract the "id" field from the first entry
-                        var id = firstEntry["id"]?.ToString();
-                        
-                        // Print the extracted ID
-                        Console.WriteLine("First entry ID: " + id);
-                        if (id != null)
-                        {
-                            url = $"https://perenual.com/api/species/details/5257?key=sk-il1O6717dcf920ca97383";
-                            //url = $"https://perenual.com/api/species/details/{id}?key=sk-il1O6717dcf920ca97383";
-                            response = await client.GetAsync(url);
-                            response.EnsureSuccessStatusCode();
-                            responseData = await response.Content.ReadAsStringAsync();
-                            Console.WriteLine("Successfully got specific data");
-                            
-                            //string description = GetDescription(responseData);
-                            //ViewData["description"] = description;
-                            //Console.WriteLine("Description: " + description);
-                            Console.WriteLine("Successfully got description");
-
-                        }
-                        else
-                        {
-                            Console.WriteLine("No ID found for the given query.");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("No data found for the given query.");
-                    }
-                }
-                catch (HttpRequestException e)
-                {
-                    Console.WriteLine($"Request error: {e.Message}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"An error occurred: {ex.Message}");
-                }
-            }
-        }
-
-        public async Task<int> GetIDfromName(string name)
-        {
-            using (var client = new HttpClient())
-            {
-                try
-                {
-                    string url = $"https://perenual.com/api/species-list?key=sk-il1O6717dcf920ca97383&q={name}";
-                    var response = await client.GetAsync(url);
-                    response.EnsureSuccessStatusCode();
-                    var responseData = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine("Successfully got data from name");
-                    var jsonObject = JObject.Parse(responseData);
-                    var data = jsonObject["data"] as JArray;
-                    if (data != null && data.Count > 0)
-                    {
-                        var firstEntry = data[0];
-                        var id = firstEntry["id"]?.ToString();
-                        Console.WriteLine("First entry ID: " + id);
-                    }
-                    else
-                    {
-                        Console.WriteLine("No data found for the given query.");
-                    }
-                    return (int)id;
-                }
-                catch (HttpRequestException e)
-                {
-                    Console.WriteLine($"Request error: {e.Message}");
-                    return 0;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"An error occurred: {ex.Message}");
-                    return 0;
-                }
-            }
-        }
-
-
-
-        // private string GetDescription(string responseData)
-        // {
-        //     // Parse the JSON response data
-        //     var jsonObject = JObject.Parse(responseData);
-
-        //     // Extract the "description" field
-        //     var description = jsonObject["description"]?.ToString();
-
-        //     return description ?? "Description not available";
-        // }
-
-        // private int getIDfromName(string name, response)
-        // {
-        //     string url = $"https://perenual.com/api/species-list?key=sk-il1O6717dcf920ca97383&q=Monstera deliciosa";
-        //     var response = client.GetAsync(url);
-        //     response.EnsureSuccessStatusCode();
-        //     var responseData = await response.Content.ReadAsStringAsync();
-        //     var jsonObject = JObject.Parse(responseData);
-        //     int id = 1;
-        //     id = (int)jsonObject[0]["id"];
-        //     return id;
-        // }
     }
 }
