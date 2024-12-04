@@ -94,8 +94,8 @@
 {
     <form asp-page-handler="AddList" method="post">
         <input type="hidden" value="@kewID" name="KewID" />
-        <select name="list">
-            <option id="selectList" value="">Select List</option>
+        <select id="selectlist" name="list" onchange="show()">
+            <option value="new">Start a New List</option>
             @foreach (var item in Model.SelectList)
             {
                 if (item.OwnerID == UserManager.GetUserId(User))
@@ -105,10 +105,9 @@
                     </option>
                 }
             }
-            <option id="newList" value="">Start a New List</option>
         </select>
         <input type="hidden" value="@UserManager.GetUserId(User)" name="userID" />
-        <input type="text" value="" placeholder="New list name" name="newName" />
+        <input id="nametextfield" type="text" value="" placeholder="New list name" name="newName" />
         <input type="submit" value="Add" />
     </form>
 }
@@ -122,3 +121,16 @@
 <div>
     <a asp-page="./Index">Back to Search</a>
 </div>
+
+@section Scripts
+{
+    <script type="text/javascript">
+        function show() {
+            if ($("#selectlist :selected").val() == "new") {
+                $("#nametextfield").show();
+            } else {
+                $("#nametextfield").hide();
+            }
+        }
+    </script>
+}
